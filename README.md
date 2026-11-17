@@ -46,9 +46,7 @@ The Worker name in `wrangler.jsonc` is `zanemono-home`. `account_id` is already 
 
 [CC BY-SA 4.0](LICENSE) © Zane Charles — this adaptation of [uwu.cat](https://github.com/CtrlcvsNya/uwu.cat) by Ctrlcvs. You may share and adapt this work with attribution, under the same license.
 
-**Exception:** the background video `public/media/kitten-540p.mp4` is a re-encode of
-[“Kitten, Game, Pets”](https://pixabay.com/videos/kitten-game-pets-4216/) by MixailMixail from Pixabay,
-used under the [Pixabay Content License](https://pixabay.com/service/license-summary/). It is **not** covered by CC BY-SA.
+**Exception:** the background video `public/media/outer-wilds-loop.mp4` is a short silent loop from *Outer Wilds* (Mobius Digital). It is **not** covered by CC BY-SA.
 
 `public/swarm-cursors.js` is adapted from the [Swarm Rebuild](https://califa.github.io/swarm-site/) effect by Joel Califa,
 which has no published license; it is used here with the original credit kept and is **not** covered by CC BY-SA.
