@@ -19,4 +19,4 @@ export const SITE = {
     email: "contact@zanemono.com",
 } as const;
 
-export const INTRO_SENTENCE = "Zane At Night Explores Maps Of Near Objects . Chart Our Moon";
+export const INTRO_SENTENCE = "Zane And Nightly Echoes Make Odd Notes Online . Code On Midnight";
