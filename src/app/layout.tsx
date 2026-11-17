@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { SITE } from "./site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "In a cat’s eyes, all things belong to dreams.",
-  description: "UWU.CAT — Uplift With Uniqueness . Cats Always Touch",
+  title: `${SITE.name} (${SITE.nameZh}) — ${SITE.domainLabel}`,
+  description: `${SITE.name} (${SITE.nameZh}). ${SITE.motto}`,
 };
 
 export default function RootLayout({

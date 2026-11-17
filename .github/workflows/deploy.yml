@@ -1,3 +1,8 @@
+# 推送到 main 时构建并部署到 Cloudflare Workers。
+# 需要在仓库 Settings → Secrets and variables → Actions 里配置：
+#   CLOUDFLARE_API_TOKEN  （用 Cloudflare 的 “Edit Cloudflare Workers” 模板创建）
+# wrangler.jsonc 里的 account_id 也要改成你自己的 Account ID。
+
 name: Build & Deploy
 
 on:

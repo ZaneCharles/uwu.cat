@@ -4,8 +4,9 @@ import {useEffect, useRef, useState} from "react";
 import {flushSync} from "react-dom";
 import Script from "next/script";
 import AsciiVideo from "@/app/components/AsciiVideo";
+import {SITE, INTRO_SENTENCE} from "./site";
 
-const sentence = "Uplift With Uniqueness . Cats Always Touch";
+const sentence = INTRO_SENTENCE;
 const words = sentence.split(" ");
 
 // ---------------- 缓动 ----------------
@@ -18,8 +19,8 @@ const IN_STAGGER = 0.08;     // 入场错峰
 const HOLD = 1.5;            // 整句停留
 const COLLAPSE_DUR = 0.75;   // 非首字母收拢
 const COLLAPSE_STAGGER = 0.035;
-const GROW_DUR = 0.9;        // UWU.CAT 放大
-const NYA_DELAY = 0.7;       // UWU.CAT 开始放大后多久冒出 Nya~
+const GROW_DUR = 0.9;        // ZANEMONO.COM 放大
+const NYA_DELAY = 0.7;       // ZANEMONO.COM 开始放大后多久冒出 Nya~
 const NYA_DUR = 1.25;        // Nya~ 弹出 → 停留 → 消失
 // 大标题停留到 Nya~ 刚好消失，再飞入方框
 const TITLE_HOLD = NYA_DELAY + NYA_DUR - GROW_DUR;
@@ -42,7 +43,7 @@ const TIMELINE: [Phase, number][] = [
 //    （这一下点击也让浏览器允许播放声音）。点下去 logo 一弹、爆开一圈光，光标被冲散再聚拢
 // 1. 一个光标把 logo 拖到那句话下方（够低，光标绕着它转圈时不挡字）
 // 2. 光标把整句话画出来，画完后围着 logo 转圈，一个光标去点底部的 Play
-// 3. 页面播放收拢动画：UWU.CAT 放大，一个光标飞过去拍它一下 → 弹出 Nya~ → 飞进方框位置
+// 3. 页面播放收拢动画：ZANEMONO.COM 放大，一个光标飞过去拍它一下 → 弹出 Nya~ → 飞进方框位置
 // 4. 底部的进度条弹出来：第二轮重建的头两个 layer 是“把 logo 缩小并拖进方框”（其他光标一起摸着它端过去）
 //    和“从上往下给它上色”；logo 一放好，一个光标给它上色的同时，其他光标就一个接一个去干活：
 //    重建电视（玻璃屏、复制出来的扫描线）和方框；先干完的光标绕着屏幕中间（方框外面一圈）转
@@ -168,7 +169,7 @@ function ScanLines({blocks}: { blocks: number }) {
     );
 }
 
-// 按词拆“首字母/其余”，首字母连起来正好是 UWU.CAT
+// 按词拆“首字母/其余”，首字母连起来正好是 ZANEMONO.COM
 type Split = { pre: string; first: string; post: string };
 const splitWord = (w: string): Split => {
     const m = w.match(/[A-Za-z0-9]/);
@@ -179,13 +180,17 @@ const splitWord = (w: string): Split => {
 const splits = words.map(splitWord);
 
 const LINKS = [
-    {label: "X", href: "https://x.com/DaHuangCore"},
-    {label: "Github", href: "https://github.com/CtrlcvsNya"},
+    {label: "Portfolio & Dev Log", href: SITE.portfolioUrl},
+    {label: "GitHub", href: SITE.githubUrl},
+    {label: "Email", href: `mailto:${SITE.email}`},
 ];
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
-const TITLE = splits.map((s) => s.first).join(""); // "UWU.CAT"
+const TITLE = splits.map((s) => s.first).join(""); // "ZANEMONO.COM"
+if (TITLE !== SITE.domainLabel) {
+    throw new Error(`INTRO_SENTENCE 的首字母是 "${TITLE}"，应等于 "${SITE.domainLabel}"，请检查 site.ts`);
+}
 
 /** 用页面字体在 100px 下实际排一次，返回文字宽度 */
 function measureAt100(text: string) {
@@ -198,7 +203,7 @@ function measureAt100(text: string) {
     return width;
 }
 
-/** 按当前窗口算字号：整句一行放得下，UWU.CAT 放大后不撑满屏幕 */
+/** 按当前窗口算字号：整句一行放得下，ZANEMONO.COM 放大后不撑满屏幕 */
 function computeSizes() {
     const W = window.innerWidth;
     const avail = W - (W >= 640 ? 160 : 32); // 减去 main 的左右 padding（p-4 / sm:p-20）
@@ -379,7 +384,7 @@ export default function Home() {
     const [cardShown, setCardShown] = useState(false); // 方框（标题以外的部分）是否可见
     const [standIn, setStandIn] = useState(false);     // 第二轮快照：背景视频的黑屏替身
     const [tvOn, setTvOn] = useState(false);           // 全部完成后：电视开机，视频亮起并播放
-    const [nya, setNya] = useState(false);             // swarm：光标拍了 UWU.CAT 一下 → Nya~
+    const [nya, setNya] = useState(false);             // swarm：光标拍了 ZANEMONO.COM 一下 → Nya~
     const [prompt, setPrompt] = useState(false);       // swarm：开场等待点击 logo 的多国语言提示
     const logoRef = useRef<HTMLDivElement>(null);      // 方框里的真 logo（swarm 把 logo 拖到这里）
     const titleRef = useRef<HTMLDivElement>(null);     // 收拢/放大中的标题（光标去拍它）
@@ -401,7 +406,7 @@ export default function Home() {
             return v;
         };
 
-        // 等字体加载完，按真实字宽算字号，保证整句和 UWU.CAT 在任何屏幕上都不换行
+        // 等字体加载完，按真实字宽算字号，保证整句和 ZANEMONO.COM 在任何屏幕上都不换行
         // 自定义字体是按需加载的，显式 load 一次再量，避免量到回退字体
         const fontsReady = document.fonts
             ? document.fonts.load('700 100px "MyFont"', TITLE).then(() => document.fonts.ready)
@@ -463,7 +468,7 @@ export default function Home() {
 
             // 下面这些位置都是函数，每帧按当前窗口 / 排版重新算，调整窗口时 logo 和光标会跟着走
             const center = () => ({x: window.innerWidth / 2, y: window.innerHeight / 2, size: LOGO_INTRO_SIZE});
-            // logo 停在句子下方，低到光标绕着它转圈时碰不到之后放大的 UWU.CAT（行高 1.25），
+            // logo 停在句子下方，低到光标绕着它转圈时碰不到之后放大的 ZANEMONO.COM（行高 1.25），
             // 又不压到底部的控制条（约 64px 高）
             const parked = () => {
                 const H = window.innerHeight;
@@ -491,7 +496,7 @@ export default function Home() {
                 const r = logoRef.current?.querySelector("svg")?.getBoundingClientRect();
                 return r ? {x: r.left + r.width / 2, y: r.top + r.height / 2, size: r.width} : parked();
             };
-            // 光标拍 UWU.CAT 的位置：右半边、偏上（Nya~ 从右上角冒出来）
+            // 光标拍 ZANEMONO.COM 的位置：右半边、偏上（Nya~ 从右上角冒出来）
             const titleSpot = () => {
                 const r = titleRef.current?.getBoundingClientRect();
                 return r ? {x: r.right - r.width * 0.16, y: r.top + r.height * 0.45} : center();
@@ -528,7 +533,7 @@ export default function Home() {
                 }));
                 await step(s.clickPlay());
 
-                // 3. 画布变透明，页面播放收拢动画：UWU.CAT 放大 → 光标拍它一下弹出 Nya~ → 飞进方框位置
+                // 3. 画布变透明，页面播放收拢动画：ZANEMONO.COM 放大 → 光标拍它一下弹出 Nya~ → 飞进方框位置
                 s.reveal();
                 flushSync(() => setWordsOnly(false));
                 await step(wait(0.25));
@@ -629,7 +634,7 @@ export default function Home() {
                                 /* 第一轮 swarm：整句由光标一词一词画出来 */
                                 <WordsLine fontSize={sizes.small}/>
                             ) : (
-                                /* 阶段 1~3：整句入场 → 非首字母收拢 → UWU.CAT 放大 */
+                                /* 阶段 1~3：整句入场 → 非首字母收拢 → ZANEMONO.COM 放大 */
                                 <div
                                     ref={titleRef}
                                     className={`relative flex flex-wrap justify-center items-end font-bold${nya && !animated ? " title-boop" : ""}`}
@@ -718,7 +723,7 @@ export default function Home() {
                                             {/* 标题：一直可见（方框隐藏时也是）；第二轮 swarm 里保留原样，不重画 */}
                                             <span
                                                 data-swarm-keep=""
-                                                className="inline-flex text-3xl md:text-4xl font-bold leading-[1.25] tracking-[0.02em]"
+                                                className="inline-flex whitespace-nowrap text-2xl sm:text-3xl md:text-4xl font-bold leading-[1.25] tracking-[0.02em]"
                                                 style={{visibility: "visible"}}
                                             >
                                                 {splits.map(({first}, idx) => (
@@ -737,7 +742,9 @@ export default function Home() {
                                             className="mt-2 pl-10 md:pl-12 font-mono text-[11px] leading-relaxed tracking-wide text-white/50"
                                             {...fadeUp(1.0, animated)}
                                         >
-                                            In a cat’s eyes, all things belong to dreams.
+                                            {SITE.name} ({SITE.nameZh})
+                                            <br/>
+                                            {SITE.motto}
                                         </motion.p>
                                     </div>
 
@@ -750,7 +757,7 @@ export default function Home() {
                                     />
 
                                     {/* 右：链接 / 版权 */}
-                                    <div className="flex flex-col md:items-end gap-1.5 md:min-w-[9rem]">
+                                    <div className="flex flex-col md:items-end gap-1.5 md:min-w-[16rem]">
                                         {LINKS.map(({label, href}, i) => (
                                             <motion.a
                                                 key={label}
@@ -769,23 +776,32 @@ export default function Home() {
                                             className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.16em] text-white/35 md:text-right"
                                             {...fadeUp(1.3, animated)}
                                         >
-                                            © CTRLCVS
-                                            <br/>
-                                            not for sale, AI last.
+                                            © {SITE.name}
                                         </motion.p>
                                     </div>
                                 </div>
 
                                 {/* 方框下方一行小字：源码仓库 + 许可证（第二轮由光标敲出来） */}
                                 <motion.p
-                                    className="absolute inset-x-0 top-full mt-4 flex justify-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/35"
+                                    className="absolute inset-x-0 top-full mt-4 px-4 text-center font-mono text-[10px] leading-relaxed text-white/35"
                                     {...fadeUp(1.4, animated)}
                                 >
-                                    <a href="https://github.com/CtrlcvsNya/uwu.cat" target="_blank" rel="noreferrer"
+                                    Adapted from{" "}
+                                    <a href="https://uwu.cat" target="_blank" rel="noreferrer"
                                        className="transition-colors hover:text-accent">
-                                        Source on GitHub
+                                        uwu.cat
                                     </a>
-                                    <span aria-hidden="true">·</span>
+                                    {" "}by{" "}
+                                    <a href="https://github.com/CtrlcvsNya" target="_blank" rel="noreferrer"
+                                       className="transition-colors hover:text-accent">
+                                        Ctrlcvs
+                                    </a>
+                                    <span aria-hidden="true"> · </span>
+                                    <a href="https://califa.github.io/swarm-site/" target="_blank" rel="noreferrer"
+                                       className="transition-colors hover:text-accent">
+                                        Swarm by Joel Califa
+                                    </a>
+                                    <span aria-hidden="true"> · </span>
                                     <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer license"
                                        className="transition-colors hover:text-accent">
                                         CC BY-SA 4.0
