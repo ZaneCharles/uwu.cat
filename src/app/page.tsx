@@ -180,9 +180,8 @@ const splitWord = (w: string): Split => {
 const splits = words.map(splitWord);
 
 const LINKS = [
-    {label: "Portfolio & Dev Log", href: SITE.portfolioUrl},
+    {label: "Portfolio", href: SITE.portfolioUrl},
     {label: "GitHub", href: SITE.githubUrl},
-    {label: "Email", href: `mailto:${SITE.email}`},
 ];
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
@@ -364,6 +363,94 @@ const ArrowIcon = () => (
         <path d="M7 17L17 7M17 7H7M17 7V17" stroke="currentColor" strokeWidth={3}/>
     </svg>
 );
+
+const NAV_LINK =
+    "group relative inline-flex cursor-pointer items-center gap-1.5 self-start border-0 bg-transparent p-0 font-mono text-xs uppercase tracking-[0.18em] text-white/85 transition-colors hover:text-accent focus-visible:text-accent focus-visible:outline-none @min-[42rem]:self-end after:absolute after:left-0 after:-bottom-0.5 after:h-px after:w-full after:origin-right after:scale-x-0 after:bg-accent after:transition-transform after:duration-300 hover:after:origin-left hover:after:scale-x-100";
+
+const COPIED_MS = 2200;
+
+/** clipboard 被拒绝时的同步兜底，调用时点击手势还在 */
+function copyWithExecCommand(text: string) {
+    const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;outline:none;opacity:0;";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try {
+        ok = document.execCommand("copy");
+    } finally {
+        ta.remove();
+        prev?.focus();
+    }
+    if (!ok) throw new Error("copy failed");
+}
+
+async function copyText(text: string) {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch {
+            // 权限被拒或非安全上下文，改走 execCommand
+        }
+    }
+    copyWithExecCommand(text);
+}
+
+/** Email：复制地址并在按钮旁短暂提示，不打开邮件客户端 */
+function EmailCopy({animated, delay}: {animated: boolean; delay: number}) {
+    const [copied, setCopied] = useState(false);
+    const hideRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => {
+        if (hideRef.current) clearTimeout(hideRef.current);
+    }, []);
+
+    const onCopy = async () => {
+        try {
+            await copyText(SITE.email);
+        } catch {
+            return;
+        }
+        setCopied(true);
+        if (hideRef.current) clearTimeout(hideRef.current);
+        hideRef.current = setTimeout(() => setCopied(false), COPIED_MS);
+    };
+
+    return (
+        <span className="relative self-start @min-[42rem]:self-end">
+            <motion.button
+                type="button"
+                onClick={() => {
+                    void onCopy();
+                }}
+                className={NAV_LINK}
+                {...fadeUp(delay, animated)}
+            >
+                Email
+                <ArrowIcon/>
+            </motion.button>
+            <AnimatePresence>
+                {copied && (
+                    <motion.span
+                        role="status"
+                        className="pointer-events-none absolute top-1/2 left-full z-20 ml-2 -translate-y-1/2 whitespace-nowrap bg-accent px-2 py-1 font-mono text-[10px] leading-none tracking-wide text-black shadow-[0_10px_30px_-12px_rgba(0,0,0,0.85)] @min-[42rem]:left-auto @min-[42rem]:right-full @min-[42rem]:ml-0 @min-[42rem]:mr-3"
+                        initial={{opacity: 0, y: 6}}
+                        animate={{opacity: 1, y: 0}}
+                        exit={{opacity: 0, y: 4}}
+                        transition={{duration: 0.22, ease: EASE_OUT}}
+                    >
+                        COPIED! {SITE.email}
+                    </motion.span>
+                )}
+            </AnimatePresence>
+        </span>
+    );
+}
 
 /** 方框四角的强调色角标 */
 const CORNERS = [
@@ -672,7 +759,7 @@ export default function Home() {
                             )
                         ) : (
                             /* 阶段 4：大标题飞入方框位置；swarm 开场时方框先隐藏，第二轮由光标画出来 */
-                            <div ref={cardRef} className="relative w-full max-w-[40rem]" style={cardShown ? undefined : {visibility: "hidden"}}>
+                            <div ref={cardRef} className="@container relative box-border w-full min-w-0 max-w-[780px]" style={cardShown ? undefined : {visibility: "hidden"}}>
                                 {/* 玻璃底板：先横向展开成一条线，再纵向打开 */}
                                 <motion.div
                                     className="absolute inset-0 overflow-hidden bg-black/70 backdrop-blur-xl ring-1 ring-white/10 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.95)]"
@@ -705,14 +792,15 @@ export default function Home() {
                                     />
                                 ))}
 
-                                <div className="relative flex flex-col md:flex-row gap-6 md:gap-8 p-6 md:p-8">
-                                    {/* 左：Logo + 标题 + 副标题 */}
-                                    <div className="flex flex-col flex-1">
-                                        <div className="flex items-center gap-2">
+                                <div className="relative flex w-full min-w-0 flex-col gap-5 p-4 @min-[20rem]:p-6 @min-[42rem]:flex-row @min-[42rem]:items-stretch @min-[42rem]:justify-between @min-[42rem]:gap-8 @min-[42rem]:p-8 @min-[48rem]:gap-10 @min-[48rem]:px-12 @min-[48rem]:py-10">
+                                    {/* 左：Logo + 标题 + 座右铭 */}
+                                    <div className="flex min-w-0 flex-1 flex-col">
+                                        <div className="flex min-w-0 items-center gap-2">
                                             {/* swarm 开场时由光标拖过来、上色的就是它；第二轮快照不拍（画布上已经有那个 logo 了） */}
                                             <motion.div
                                                 ref={logoRef}
                                                 data-swarm-ignore=""
+                                                className="shrink-0"
                                                 initial={animated ? {opacity: 0, scale: 0.4, rotate: -180} : false}
                                                 animate={{opacity: 1, scale: 1, rotate: 0}}
                                                 transition={{type: "spring", stiffness: 140, damping: 16, delay: 0.85}}
@@ -720,11 +808,12 @@ export default function Home() {
                                             >
                                                 <Logo/>
                                             </motion.div>
-                                            {/* 标题：一直可见（方框隐藏时也是）；第二轮 swarm 里保留原样，不重画 */}
+                                            {/* 标题：一直可见（方框隐藏时也是）；第二轮 swarm 里保留原样，不重画。
+                                                字号跟着方框走，窄屏缩小，宽屏封顶 2.25rem，避免 nowrap 撑出黑框。 */}
                                             <span
                                                 data-swarm-keep=""
-                                                className="inline-flex whitespace-nowrap text-2xl sm:text-3xl md:text-4xl font-bold leading-[1.25] tracking-[0.02em]"
-                                                style={{visibility: "visible"}}
+                                                className="inline-flex min-w-0 whitespace-nowrap font-bold leading-[1.25] tracking-[0.02em]"
+                                                style={{visibility: "visible", fontSize: "clamp(1.15rem, 7cqi, 2.25rem)"}}
                                             >
                                                 {splits.map(({first}, idx) => (
                                                     <motion.span
@@ -739,41 +828,40 @@ export default function Home() {
                                             </span>
                                         </div>
                                         <motion.p
-                                            className="mt-2 pl-10 md:pl-12 font-mono text-[11px] leading-relaxed tracking-wide text-white/50"
+                                            className="mt-3 pl-10 font-mono text-base leading-snug tracking-wide text-white/50 md:pl-12 md:text-lg"
                                             {...fadeUp(1.0, animated)}
                                         >
-                                            {SITE.name} ({SITE.nameZh})
-                                            <br/>
                                             {SITE.motto}
                                         </motion.p>
                                     </div>
 
                                     {/* 分隔线 */}
                                     <motion.div
-                                        className="hidden md:block w-px self-stretch origin-top bg-gradient-to-b from-transparent via-white/20 to-transparent"
+                                        className="hidden w-px shrink-0 self-stretch origin-top bg-gradient-to-b from-transparent via-white/20 to-transparent @min-[42rem]:block"
                                         initial={animated ? {scaleY: 0} : false}
                                         animate={{scaleY: 1}}
                                         transition={{duration: 0.8, ease: EASE_IN_OUT, delay: 0.95}}
                                     />
 
-                                    {/* 右：链接 / 版权 */}
-                                    <div className="flex flex-col md:items-end gap-1.5 md:min-w-[16rem]">
+                                    {/* 右：链接 / 版权。宽度跟内容走，不再用 min-width 把整列挤出方框 */}
+                                    <div className="flex w-max max-w-full shrink-0 flex-col items-start gap-1.5 @min-[42rem]:items-end">
                                         {LINKS.map(({label, href}, i) => (
                                             <motion.a
                                                 key={label}
                                                 href={href}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="group relative inline-flex items-center gap-1.5 self-start md:self-end font-mono text-xs uppercase tracking-[0.18em] text-white/85 transition-colors hover:text-accent after:absolute after:left-0 after:-bottom-0.5 after:h-px after:w-full after:origin-right after:scale-x-0 after:bg-accent after:transition-transform after:duration-300 hover:after:origin-left hover:after:scale-x-100"
+                                                className={NAV_LINK}
                                                 {...fadeUp(1.1 + i * 0.08, animated)}
                                             >
                                                 {label}
                                                 <ArrowIcon/>
                                             </motion.a>
                                         ))}
-                                        <div className="flex-1 min-h-3"/>
+                                        <EmailCopy animated={animated} delay={1.1 + LINKS.length * 0.08}/>
+                                        <div className="min-h-3 flex-1"/>
                                         <motion.p
-                                            className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.16em] text-white/35 md:text-right"
+                                            className="font-mono text-[10px] uppercase leading-relaxed tracking-[0.16em] text-white/35 @min-[42rem]:text-right"
                                             {...fadeUp(1.3, animated)}
                                         >
                                             © {SITE.name}
