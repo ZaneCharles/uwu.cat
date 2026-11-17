@@ -352,7 +352,7 @@ const Nya = ({delay = NYA_DELAY}: { delay?: number }) => (
             }}
             transition={{duration: NYA_DUR, delay, times: [0, 0.18, 0.3, 0.76, 1], ease: "easeOut"}}
         >
-            Nya~
+            WAH~
         </motion.span>
     </span>
 );
