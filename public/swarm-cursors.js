@@ -43,11 +43,12 @@
  *           orbitScale, orbitSquash,
  *           builds (how many s.build() calls, so only the last one ends on the
  *           big chord), playDelay, onAbort() }
- *         onAbort runs when the visitor presses Esc / ✕ (the overlay is gone).
+ *         onAbort runs when the visitor skips — Esc, Space, the SKIP × control,
+ *         or a click on blank backdrop. The overlay is already gone.
  *   s.gather(ms)        wait while the cursors fly in
  *   s.logoShow(() => ({x,y,size}))   a grey logo sprite (viewport px), like the favicon intro
  *   s.logoClick()       the logo turns into a button; resolves when clicked (s.pressLogo()
- *                       does the same from code, e.g. for Enter / Space)
+ *                       does the same from code, e.g. for Enter). Space skips the intro.
  *   s.logoDrag(() => ({x,y,size}))  a cursor drags it there (resizing on the way)
  *   s.logoPaint()       a cursor colours it in, top to bottom
  *   s.orbit(true | () => ({x, y, rx?, ry?}))  idle cursors circle the logo / that point
@@ -1658,8 +1659,8 @@
 .logo.burst>.g{opacity:.9;transition:opacity .15s}
 .intro img{display:block;width:60px;height:60px;object-fit:contain;filter:grayscale(1);opacity:.42;border-radius:14px}
 .intro .mono{width:60px;height:60px;border-radius:16px;background:#D7DADE;color:#fff;font:700 30px/60px Inter,system-ui,sans-serif;text-align:center}
-.hud{position:absolute;left:50%;bottom:20px;transform:translate(-50%,18px);opacity:0;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 10px;background:rgba(30,30,30,.94);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.28),inset 0 0 0 1px rgba(255,255,255,.07);font:500 12px/1 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;pointer-events:auto;transition:opacity .45s ease,transform .45s cubic-bezier(.2,.8,.2,1);white-space:nowrap;user-select:none;z-index:5;max-width:calc(100vw - 24px);box-sizing:border-box}
-.hud.on{opacity:1;transform:translate(-50%,0)}
+.hud{position:absolute;left:50%;bottom:20px;transform:translate(-50%,18px);opacity:0;display:flex;align-items:center;gap:10px;padding:6px 6px 6px 10px;background:rgba(30,30,30,.94);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.28),inset 0 0 0 1px rgba(255,255,255,.07);font:500 12px/1 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;pointer-events:none;transition:opacity .45s ease,transform .45s cubic-bezier(.2,.8,.2,1);white-space:nowrap;user-select:none;z-index:5;max-width:calc(100vw - 24px);box-sizing:border-box}
+.hud.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .hud .dots{display:flex;padding-left:5px}
 .hud .dots i{display:block;width:18px;height:18px;margin-left:-5px;border-radius:50%;border:2px solid #1e1e1e;font:700 9px/14px Inter,system-ui,sans-serif;font-style:normal;text-align:center;color:#fff;transition:background .3s}
 .hud .txt,.hud .status{display:flex;align-items:center;gap:7px;color:#cfcfcf;font-variant-numeric:tabular-nums}
@@ -1679,6 +1680,7 @@
 .hud button.play svg{width:10px;height:10px;display:block}
 .hud button.play.hit{background:#0a7cd1;transform:scale(.93)}
 .hud .x{padding:7px 9px;color:#aaa}
+.hud button.x.skip{padding:7px 10px;color:#fff;letter-spacing:.04em}
 .hud button.snd{display:flex;align-items:center;gap:6px;padding:6px 8px}
 .hud button.snd.off{color:#8a8a8a}
 .hud button.snd.tap{background:#0D99FF;animation:hudpulse 1.6s ease-in-out infinite}
@@ -4186,6 +4188,116 @@
       this.view.frozen = null;
     }
 
+    // Plain Esc / Space, only while this session intro is still running.
+    skipKeyEvent(e) {
+      if (!this.opts || this.dead || app !== this) return false;
+      if (e.repeat || e.isComposing) return false;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+      const space = e.key === " " || e.code === "Space";
+      if (e.key !== "Escape" && !space) return false;
+      return !this.typingTarget(e.target);
+    }
+
+    typingTarget(node) {
+      const el = node && node.nodeType === 1 ? node : null;
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return !!(el.closest && el.closest("input, textarea, select, [contenteditable='true'], [contenteditable='']"));
+    }
+
+    // A click is backdrop only when it misses every foreground target. The open
+    // control bar, links, buttons, inputs, the logo sprite, built words / card /
+    // title, and anything actually inside <main> are foreground.
+    blankBackdropClick(e) {
+      if (!this.opts || this.dead || app !== this) return false;
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+      if (this.pathHasControl(e)) return false;
+      const x = e.clientX;
+      const y = e.clientY;
+      if (this.pointInLogo(x, y)) return false;
+      if (this.pointInOpenHud(x, y)) return false;
+      if (this.pointInBuiltContent(x, y)) return false;
+      if (this.pointInPageForeground(e)) return false;
+      if (this.pointInMarkedForeground(x, y)) return false;
+      return true;
+    }
+
+    pathHasControl(e) {
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [e.target];
+      for (const n of path) {
+        if (!n || n.nodeType !== 1) continue;
+        const tag = n.tagName;
+        if (tag === "A" || tag === "BUTTON" || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "LABEL" || tag === "SUMMARY") return true;
+        if (n.isContentEditable) return true;
+        const role = n.getAttribute && n.getAttribute("role");
+        if (role === "button" || role === "link" || role === "textbox" || role === "combobox" || role === "listbox") return true;
+      }
+      return false;
+    }
+
+    pointInLogo(x, y) {
+      const el = this.view && this.view.logo;
+      if (!el || !el.classList.contains("on")) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 1 && r.height > 1 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+
+    pointInOpenHud(x, y) {
+      const hud = this.view && this.view.hud;
+      if (!hud || !hud.classList.contains("on")) return false;
+      const r = hud.getBoundingClientRect();
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+
+    nodeShown(node) {
+      for (let n = node; n && n.nodeType === 1; n = n.parentElement) {
+        const s = n.style;
+        if (s && (s.display === "none" || s.visibility === "hidden")) return false;
+      }
+      return true;
+    }
+
+    pointInBuiltContent(x, y) {
+      const items = (this.model && this.model.items) || [];
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const n = it.node;
+        if (!n || !it.vis || !this.nodeShown(n)) continue;
+        const r = n.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) continue;
+        // Full-bleed washes (CRT glass) and full-width hairlines (scanlines)
+        // are backdrop. Words, the card and the title are not.
+        if (r.width >= vw * 0.92 && r.height >= vh * 0.92) continue;
+        if (r.width >= vw * 0.85 && r.height <= Math.max(12, vh * 0.03)) continue;
+        if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return true;
+      }
+      return false;
+    }
+
+    pointInPageForeground(e) {
+      const path = typeof e.composedPath === "function" ? e.composedPath() : [e.target];
+      for (const n of path) {
+        if (!n || n.nodeType !== 1 || n.tagName === "MAIN") continue;
+        if (typeof n.closest === "function" && n.closest("main")) return true;
+      }
+      return false;
+    }
+
+    // Hint text is pointer-events:none, so a click on it falls through to the page.
+    // Its box is still foreground (the "click the icon" line), not blank backdrop.
+    pointInMarkedForeground(x, y) {
+      const nodes = document.querySelectorAll("[data-intro-foreground]");
+      for (let i = 0; i < nodes.length; i++) {
+        const r = nodes[i].getBoundingClientRect();
+        if (r.width > 1 && r.height > 1 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return true;
+      }
+      return false;
+    }
+
     bind() {
       const on = (t, ev, fn, o) => {
         t.addEventListener(ev, fn, o);
@@ -4208,7 +4320,15 @@
         this.engine.mouse = null;
       });
       on(window, "keydown", (e) => {
-        if (e.key === "Escape") {
+        // Session intro: Esc and Space use the same skip as the SKIP × button.
+        // Generic rebuild keeps Esc-to-exit exactly as before.
+        if (this.opts && this.skipKeyEvent(e)) {
+          if (e.key === " " || e.code === "Space") e.preventDefault();
+          e.stopPropagation();
+          stop(false);
+          return;
+        }
+        if (!this.opts && e.key === "Escape") {
           e.stopPropagation();
           stop(false);
         } else if ((e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -4217,6 +4337,15 @@
         }
         this.unlockSound();
       }, true);
+      // Blank backdrop only. Buttons, links, the logo, the open bar, built
+      // foreground and live page content do not count — see blankBackdropClick.
+      if (this.opts)
+        on(window, "click", (e) => {
+          if (!this.blankBackdropClick(e)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          stop(false);
+        }, true);
       // browsers only let audio start after a click/keypress on the page
       on(window, "pointerdown", () => this.unlockSound(), true);
       if (!this.env.isRoot) {
@@ -4395,6 +4524,12 @@
       E.onComplete = () => this.onComplete();
       this.bind();
       for (const k of ["tour", "replay", "live"]) v.root.querySelector(`[data-a="${k}"]`).hidden = true;
+      const skipBtn = v.root.querySelector('[data-a="close"]');
+      if (skipBtn) {
+        skipBtn.textContent = "SKIP ×";
+        skipBtn.classList.add("skip");
+        skipBtn.title = "Skip (Esc)";
+      }
       v.bg.style.transition = "none";
       v.bg.classList.add("on");
       v.status.textContent = "";

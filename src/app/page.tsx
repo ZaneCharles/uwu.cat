@@ -302,12 +302,13 @@ function ClickPrompt() {
         >
             {/* 一个小小的上指箭头，轻轻上下浮动，指向 logo */}
             <motion.span
+                data-intro-foreground=""
                 className="block h-2 w-2 rotate-45 border-l border-t border-accent/70"
                 animate={{y: [0, -4, 0]}}
                 transition={{duration: 1.6, ease: "easeInOut", repeat: Infinity}}
                 aria-hidden="true"
             />
-            <div className="mt-3 grid place-items-center">
+            <div className="mt-3 grid place-items-center" data-intro-foreground="">
                 <AnimatePresence initial={false}>
                     <motion.p
                         key={p.lang}
@@ -485,7 +486,7 @@ export default function Home() {
             timers.push(setTimeout(fn, s * 1000));
         };
         const wait = (s: number) => new Promise<void>((resolve) => at(s, resolve));
-        // 每一步之后检查：被跳过（Esc / ✕）或组件卸载就停下
+        // 每一步之后检查：被跳过（Esc / Space / SKIP × / 点空白）或组件卸载就停下
         const STOP = Symbol("stop");
         const step = async <T, >(p: Promise<T>) => {
             const v = await p;
@@ -528,7 +529,7 @@ export default function Home() {
             };
             if (!startSession) return plain();
 
-            // 按 Esc / ✕ 跳过：直接到最终画面
+            // 跳过（Esc / Space / SKIP × / 点空白）：直接到最终画面
             const finish = () => {
                 aborted = true;
                 timers.forEach(clearTimeout);
@@ -591,16 +592,21 @@ export default function Home() {
 
             const run = async () => {
                 // 0. 黑屏中间一个灰色 logo，光标们飞进来围着它转；画布先透明，让页面上的提示文字露出来。
-                //    等访客点击 logo（或按 Enter / 空格）
+                //    等访客点击 logo（或按 Enter）。空格在整段开场里都是跳过，不在这里接。
                 s.orbit(true);
                 s.reveal();
                 s.logoShow(center);
                 setPrompt(true);
                 onKey = (e: KeyboardEvent) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        s.pressLogo();
+                    if (e.key !== "Enter" || e.repeat || e.isComposing) return;
+                    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+                    const t = e.target;
+                    if (t instanceof HTMLElement) {
+                        const tag = t.tagName;
+                        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable) return;
                     }
+                    e.preventDefault();
+                    s.pressLogo();
                 };
                 window.addEventListener("keydown", onKey);
                 await step(s.logoClick());
@@ -674,6 +680,8 @@ export default function Home() {
             clearTimeout(resizeT);
             window.removeEventListener("resize", onResize);
             if (onKey) window.removeEventListener("keydown", onKey);
+            // Drop the overlay (and its Esc / Space / backdrop listeners) if we unmount mid-intro.
+            session?.close();
         };
     }, []);
 
