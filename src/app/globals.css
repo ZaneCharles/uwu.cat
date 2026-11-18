@@ -39,6 +39,14 @@ body {
   background-size: 160px 160px;
 }
 
+/* 标题左侧图标：克制的多层光晕，贴着字形散开，不做成大光斑 */
+.title-logo {
+  filter:
+    drop-shadow(0 0 2px rgba(206, 255, 28, 0.55))
+    drop-shadow(0 0 8px rgba(206, 255, 28, 0.38))
+    drop-shadow(0 0 16px rgba(206, 255, 28, 0.2));
+}
+
 /* 标题字：上亮下暗的金属渐变 */
 .title-ink {
   background: linear-gradient(180deg, #ffffff 0%, #f4f4f4 45%, #a8a8a8 100%);
