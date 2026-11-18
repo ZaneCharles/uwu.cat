@@ -144,11 +144,11 @@ void main() {
         splash = max(splash, (1.0 - smoothstep(0.0, uCellSize.y * 3.0, dist)) * (1.0 - smoothstep(0.0, 0.35, age)));
     }
 
-    // 鼠标透镜：平滑衰减的径向权重。只往亮度上加，不改采样方向，避免中心被挖暗。
+    // 悬停权重。不参与 UV：位移只来自点击波纹。
     float md = length(center - uMouse.xy) / max(uMouse.z, 1.0);
     float m  = (1.0 - smoothstep(0.0, 1.0, md)) * uMouse.w;
 
-    // 点击波纹才做 UV 位移，幅度夹住。鼠标悬停不参与位移，否则会吸到更暗的邻格。
+    // 点击波纹的 UV 位移，幅度夹住。悬停不位移，避免吸到更暗的邻格。
     vec2 baseCuv = (cell + 0.5) / uGrid;
     vec2 shift = clamp(disp * wl * 0.45 / (uGrid * uCellSize), vec2(-0.03), vec2(0.03));
     vec3 baseCol = texture2D(uCells, clamp(baseCuv, 0.0, 1.0)).rgb;
@@ -158,16 +158,26 @@ void main() {
 
     float lum0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
     float lum = smoothstep(0.03, 0.95, lum0);
-    // 旧的 dot(disp, vec2(0.12)) 在波谷是负数，会把字符挖暗。悬停和波纹都只加不减。
-    float waveLift = length(disp) * 0.10;
-    float rippleBoost = m * 0.46 + waveLift;
-    float lumGlyph = clamp(lum + rippleBoost, 0.0, 1.0);
+    // 波纹亮度只加不减（旧的 dot(disp) 在波谷会挖暗）。悬停本身不加这层静态光环。
+    float lumGlyph = clamp(lum + length(disp) * 0.10, 0.0, 1.0);
 
-    // 整体色调仍按视频亮度。悬停把字符往密的一头推（+ * % # @），并加一层很轻的高光。
     vec3 base = mix(vec3(lum), col, 1.2) * 1.05;
-    vec3 c = base + (vec3(0.20) + uAccent * 0.28) * m;
-
+    vec3 c = base;
     float g = floor(lumGlyph * (uGlyphs - 1.0) + 0.5);
+
+    // 原版悬停：12 Hz 乱码（tick = floor(uTime * 12)）+ 强调色。
+    // 乱码只从 '+'（charset 下标 6）往更密的字符里抽，并且不会比亮度映射的字更疏，
+    // 避免在偏暗的画面上抽到 '.' ':' '-' 变成黑洞。
+    if (m > 0.001) {
+        if (flick < m * 0.6) {
+            float denseStart = 6.0;
+            float denseCount = max(uGlyphs - denseStart, 1.0);
+            float denseRandom = denseStart + floor(hash(cell + tick * 1.31) * denseCount);
+            g = max(g, denseRandom);
+        }
+        c = mix(c, uAccent, m * 0.55) + m * 0.12;
+        c += vec3(0.06) * m;
+    }
 
     if (crest > 0.0) {
         g += crest * 5.0;
