@@ -328,7 +328,7 @@ function ClickPrompt() {
 
 const Logo = () => (
     <svg viewBox="0 0 123 123" aria-hidden="true" fill="currentColor"
-         className="w-8 h-8 md:w-10 md:h-10 text-accent drop-shadow-[0_0_12px_rgba(206,255,28,0.45)]">
+         className="title-logo w-8 h-8 md:w-10 md:h-10 text-accent">
         <polygon points={LOGO_POINTS}/>
     </svg>
 );
