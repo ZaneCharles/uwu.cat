@@ -4033,6 +4033,46 @@
       o.onended = () => g.disconnect();
     }
 
+    // Once, when the scripted intro gives way to the homepage: the same CRT
+    // power-on swoosh closeSession plays at the natural ending. Skip calls this
+    // too. A second call (skip racing the natural ending, or a repeated skip) is
+    // ignored. Resume runs inside the skip gesture so autoplay policy doesn't
+    // drop the swoosh when the visitor never clicked the logo.
+    homeTransition() {
+      if (this._homeTransition) return;
+      this._homeTransition = true;
+      this.log("homeTransition", []);
+      if (!this.ctx) return;
+      const play = () => {
+        if (this._homeTransitionPlayed) return;
+        // resume() can resolve a tick before state flips to running
+        if (this.on && this.ctx && this.fakeNow == null && this.ctx.state !== "running") {
+          if (!this._homeTransitionWait) {
+            this._homeTransitionWait = true;
+            requestAnimationFrame(() => play());
+          }
+          return;
+        }
+        this._homeTransitionPlayed = true;
+        if (this.on) this.tvOn();
+        this.close(this.on ? 1.2 : 0.25);
+      };
+      this.playThroughSilent();
+      if (!this.on || this.fakeNow != null || this.ctx.state === "running") {
+        play();
+        return;
+      }
+      let resumed;
+      try {
+        resumed = this.ctx.resume();
+      } catch (_) {
+        play();
+        return;
+      }
+      if (resumed && typeof resumed.then === "function") resumed.then(play).catch(() => play());
+      else play();
+    }
+
     // session mode: an old CRT tube powering on, a low "thoom" and a crackle of static
     tvOn() {
       this.log("tvOn", []);
@@ -5177,18 +5217,23 @@
       cancelAnimationFrame(this.raf);
       for (const u of this.unbinds || []) u();
       this.view.host.remove();
-      if (this.sfx) {
-        this.sfx.tvOn();
-        this.sfx.close(1.2);
-      }
+      if (this.sfx) this.sfx.homeTransition();
       emit("swarm:exit");
     }
 
     destroy(reveal) {
       unhidePage();
       if (this.sfx) {
-        if (reveal) this.sfx.release();
-        this.sfx.close(reveal ? 1.4 : 0.25);
+        if (reveal) {
+          this.sfx.release();
+          this.sfx.close(1.4);
+        } else if (this.opts) {
+          // Session intro skipped straight to the homepage. Same swoosh as
+          // closeSession(), from this key/click/tap gesture.
+          this.sfx.homeTransition();
+        } else {
+          this.sfx.close(0.25);
+        }
       }
       const finish = () => {
         this.dead = true;
