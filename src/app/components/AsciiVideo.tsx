@@ -144,24 +144,30 @@ void main() {
         splash = max(splash, (1.0 - smoothstep(0.0, uCellSize.y * 3.0, dist)) * (1.0 - smoothstep(0.0, 0.35, age)));
     }
 
-    vec2 cuv = (cell + 0.5) / uGrid - disp * wl * 0.45 / (uGrid * uCellSize);
-    vec3 col = texture2D(uCells, clamp(cuv, 0.0, 1.0)).rgb;
-
-    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    lum = smoothstep(0.03, 0.95, lum + dot(disp, vec2(0.12)) * 0.5);
-
-    // 护眼：饱和度/亮度只做轻微提升；字符不再随机抖动和闪烁（只在交互时才乱码）
-    vec3 base = mix(vec3(lum), col, 1.2) * 1.05;
-    vec3 c = base;
-
-    float g = floor(lum * (uGlyphs - 1.0) + 0.5);
-
+    // 鼠标透镜：平滑衰减的径向权重。只往亮度上加，不改采样方向，避免中心被挖暗。
     float md = length(center - uMouse.xy) / max(uMouse.z, 1.0);
     float m  = (1.0 - smoothstep(0.0, 1.0, md)) * uMouse.w;
-    if (m > 0.001) {
-        if (flick < m * 0.6) g = 1.0 + floor(hash(cell + tick * 1.31) * (uGlyphs - 1.0));
-        c = mix(c, uAccent, m * 0.55) + m * 0.12;
-    }
+
+    // 点击波纹才做 UV 位移，幅度夹住。鼠标悬停不参与位移，否则会吸到更暗的邻格。
+    vec2 baseCuv = (cell + 0.5) / uGrid;
+    vec2 shift = clamp(disp * wl * 0.45 / (uGrid * uCellSize), vec2(-0.03), vec2(0.03));
+    vec3 baseCol = texture2D(uCells, clamp(baseCuv, 0.0, 1.0)).rgb;
+    vec3 distorted = texture2D(uCells, clamp(baseCuv - shift, 0.0, 1.0)).rgb;
+    // 位移只负责波动和跳字；采样到更暗（含画面外的黑边）时不低于未位移颜色的 85%
+    vec3 col = max(distorted, baseCol * 0.85);
+
+    float lum0 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    float lum = smoothstep(0.03, 0.95, lum0);
+    // 旧的 dot(disp, vec2(0.12)) 在波谷是负数，会把字符挖暗。悬停和波纹都只加不减。
+    float waveLift = length(disp) * 0.10;
+    float rippleBoost = m * 0.46 + waveLift;
+    float lumGlyph = clamp(lum + rippleBoost, 0.0, 1.0);
+
+    // 整体色调仍按视频亮度。悬停把字符往密的一头推（+ * % # @），并加一层很轻的高光。
+    vec3 base = mix(vec3(lum), col, 1.2) * 1.05;
+    vec3 c = base + (vec3(0.20) + uAccent * 0.28) * m;
+
+    float g = floor(lumGlyph * (uGlyphs - 1.0) + 0.5);
 
     if (crest > 0.0) {
         g += crest * 5.0;
