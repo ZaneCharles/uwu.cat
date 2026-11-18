@@ -234,6 +234,50 @@ function hexToRgb(hex: string): [number, number, number] {
     return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
+/**
+ * 竖屏 cover 的水平锚点，语义与 CSS object-position 相同：
+ * 0 贴左，1 贴右，多出来的宽度按这个比例留在取样窗左边。
+ *
+ * 源片是 16:9，主体（营火、木屋、飞船）在右半边。手机竖屏或把窗口拉成窄高时，
+ * 居中裁切只剩右侧一条缝。82% 把取样窗挪到主体上：营火完整留在画面里，
+ * 右侧的树和飞船也进画，又不会像贴右（100%）那样把营火切掉。
+ * 横屏仍用 0.5。视频元素的 object-position 用同一个值。
+ */
+const PORTRAIT_ANCHOR_X = 0.82;
+
+/** 视口宽 < 高（含桌面窗口被拉成竖条，不看 UA）。正方形仍算横屏，保持居中。 */
+function isPortraitSize(width: number, height: number) {
+    return width > 0 && height > 0 && width < height;
+}
+
+function objectPositionFor(portrait: boolean) {
+    if (!portrait) return "center center";
+    // 0.82 → "82%"，和 cover 矩形用的是同一个锚点
+    const pct = Math.round(PORTRAIT_ANCHOR_X * 1000) / 10;
+    return `${pct}% center`;
+}
+
+/**
+ * object-fit: cover 的取样矩形，UV (x, y, w, h)。
+ * 只在竖屏、并且正在裁左右两边时右移；裁上下（超宽横屏）和横屏的左右裁切都保持居中。
+ */
+function coverRect(
+    viewAspect: number,
+    videoAspect: number,
+    portrait: boolean,
+): [number, number, number, number] {
+    if (!(viewAspect > 0) || !(videoAspect > 0) || !Number.isFinite(viewAspect) || !Number.isFinite(videoAspect)) {
+        return [0, 0, 1, 1];
+    }
+    if (viewAspect > videoAspect) {
+        const visH = videoAspect / viewAspect;
+        return [0, (1 - visH) * 0.5, 1, visH];
+    }
+    const visW = viewAspect / videoAspect;
+    const anchorX = portrait ? PORTRAIT_ANCHOR_X : 0.5;
+    return [(1 - visW) * anchorX, 0, visW, 1];
+}
+
 function compile(gl: WebGLRenderingContext, type: number, src: string) {
     const s = gl.createShader(type)!;
     gl.shaderSource(s, src);
@@ -293,6 +337,8 @@ export default function AsciiVideo({
     const revealedRef = useRef(revealed);
     const playingRef = useRef(playing);
     const [fallback, setFallback] = useState(false);
+    // 和画布 cover 共用锚点。WebGL 失败时视频元素本身被显示，方向变化时一起改。
+    const [objectPosition, setObjectPosition] = useState("center center");
 
     useEffect(() => {
         revealedRef.current = revealed;
@@ -318,8 +364,20 @@ export default function AsciiVideo({
         const video = videoRef.current! as VFCVideo;
         const gl = canvas.getContext("webgl", {antialias: false, alpha: false, powerPreference: "low-power"});
         if (!gl) {
+            // 没有 WebGL 时画面就是这颗 <video> 的 object-fit: cover。
+            // 用视口宽高比（不是 UA）决定锚点，resize / orientationchange 时重算。
+            const syncFallbackPosition = () => {
+                const next = objectPositionFor(isPortraitSize(window.innerWidth, window.innerHeight));
+                setObjectPosition((prev) => (prev === next ? prev : next));
+            };
+            syncFallbackPosition();
             setFallback(true);
-            return;
+            window.addEventListener("resize", syncFallbackPosition);
+            window.addEventListener("orientationchange", syncFallbackPosition);
+            return () => {
+                window.removeEventListener("resize", syncFallbackPosition);
+                window.removeEventListener("orientationchange", syncFallbackPosition);
+            };
         }
 
         // ---------- 程序 & 几何 ----------
@@ -404,10 +462,15 @@ export default function AsciiVideo({
         let cover: [number, number, number, number] = [0, 0, 1, 1];
         const updateCover = () => {
             const vw = video.videoWidth, vh = video.videoHeight;
-            if (!vw || !vh) return;
-            const a = (cols * cellW) / (rows * cellH);
-            const v = vw / vh;
-            cover = a > v ? [0, (1 - v / a) / 2, 1, v / a] : [(1 - a / v) / 2, 0, a / v, 1];
+            const viewW = cols * cellW;
+            const viewH = rows * cellH;
+            // 锚点看元素的 CSS 尺寸（随窗口 / 旋转变化），取样比例看字符网格，避免格子取整露出黑边。
+            const portrait = isPortraitSize(canvas.clientWidth, canvas.clientHeight);
+            if (vw && vh && viewW && viewH) {
+                cover = coverRect(viewW / viewH, vw / vh, portrait);
+            }
+            const next = objectPositionFor(portrait);
+            setObjectPosition((prev) => (prev === next ? prev : next));
         };
 
         const resize = () => {
@@ -448,6 +511,12 @@ export default function AsciiVideo({
 
         const ro = new ResizeObserver(resize);
         ro.observe(canvas);
+        // 旋转时有的浏览器会先发 orientationchange，布局完成后再触发 ResizeObserver。
+        // 两边都重算，窄高窗口（不限手机）换方向后锚点跟着变。
+        const onOrient = () => {
+            requestAnimationFrame(() => requestAnimationFrame(resize));
+        };
+        window.addEventListener("orientationchange", onOrient);
         // 字体加载完后重建一次 atlas，避免用到回退字体
         document.fonts?.ready.then(resize);
 
@@ -555,6 +624,7 @@ export default function AsciiVideo({
             cancelAnimationFrame(raf);
             if (hasVFC) video.cancelVideoFrameCallback(vfcHandle);
             ro.disconnect();
+            window.removeEventListener("orientationchange", onOrient);
             video.removeEventListener("loadedmetadata", onMeta);
             document.removeEventListener("visibilitychange", onVis);
             window.removeEventListener("pointermove", onMove);
@@ -583,8 +653,15 @@ export default function AsciiVideo({
                 preload="auto"
                 crossOrigin="anonymous"
                 style={fallback
-                    ? {width: "100%", height: "100%", objectFit: "cover", opacity: revealed ? 0.35 : 0, transition: "opacity 1s"}
-                    : {display: "none"}}
+                    ? {
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition,
+                        opacity: revealed ? 0.35 : 0,
+                        transition: "opacity 1s",
+                    }
+                    : {display: "none", objectFit: "cover", objectPosition}}
             />
             {!fallback && <canvas ref={canvasRef} style={{display: "block", width: "100%", height: "100%"}}/>}
         </div>

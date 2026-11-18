@@ -326,12 +326,102 @@ function ClickPrompt() {
     );
 }
 
-const Logo = () => (
-    <svg viewBox="0 0 123 123" aria-hidden="true" fill="currentColor"
-         className="title-logo w-8 h-8 md:w-10 md:h-10 text-accent">
-        <polygon points={LOGO_POINTS}/>
-    </svg>
-);
+type SpinKey = { offset: number; deg: number };
+
+function sampleSpin(keys: SpinKey[], p: number) {
+    if (p <= 0) return keys[0].deg;
+    if (p >= 1) return keys[keys.length - 1].deg;
+    let i = 1;
+    while (i < keys.length - 1 && keys[i].offset < p) i++;
+    const a = keys[i - 1];
+    const b = keys[i];
+    const u = (p - a.offset) / (b.offset - a.offset || 1);
+    return a.deg + (b.deg - a.deg) * u;
+}
+
+/**
+ * 从当前角度顺时针甩约 168°，再反向越过正位、小幅回弹，最后精确停在 0°（或等价的 360° 整数倍）。
+ * 线性时间轴，弹性来自关键帧间距。重触发时接着当前角度重来，不会卡在半路。
+ */
+function buildLogoSpin(from: number): SpinKey[] {
+    const peak = from + 168;
+    const back = Math.floor(peak / 360) * 360;
+    const backDist = peak - back;
+    if (backDist >= 80 && backDist <= 230) {
+        const settle = back;
+        return [
+            {offset: 0, deg: from},
+            {offset: 0.34, deg: peak},
+            {offset: 0.56, deg: settle - 28},
+            {offset: 0.74, deg: settle + 12},
+            {offset: 0.88, deg: settle - 4},
+            {offset: 1, deg: settle},
+        ];
+    }
+    const settle = Math.ceil(peak / 360) * 360;
+    return [
+        {offset: 0, deg: from},
+        {offset: 0.32, deg: peak},
+        {offset: 0.48, deg: settle + 24},
+        {offset: 0.66, deg: settle - 22},
+        {offset: 0.82, deg: settle + 8},
+        {offset: 1, deg: settle},
+    ];
+}
+
+/** 标题左侧星标：悬停、点击、触摸都做一次性弹性旋转。光晕仍由 .title-logo 的 drop-shadow 负责。 */
+function Logo() {
+    const ref = useRef<SVGSVGElement>(null);
+    const animRef = useRef<Animation | null>(null);
+    const keysRef = useRef<SpinKey[] | null>(null);
+
+    const spin = (e: React.PointerEvent<SVGSVGElement>) => {
+        if (e.pointerType === "mouse" && e.type === "pointerdown" && e.button !== 0) return;
+        // 触摸会先 pointerenter 再 pointerdown，只响应按下，避免同一次触摸连转两圈
+        if (e.type === "pointerenter" && e.pointerType !== "mouse") return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const el = ref.current;
+        if (!el) return;
+        const prev = animRef.current;
+        let from = 0;
+        if (prev && keysRef.current && prev.playState === "running") {
+            const dur = Number(prev.effect?.getComputedTiming().duration) || 1;
+            const t = Number(prev.currentTime) || 0;
+            from = sampleSpin(keysRef.current, Math.min(1, t / dur));
+        }
+        const keys = buildLogoSpin(from);
+        el.style.transform = `rotate(${from}deg)`;
+        prev?.cancel();
+        const anim = el.animate(
+            keys.map(({offset, deg}) => ({transform: `rotate(${deg}deg)`, offset})),
+            {duration: 760, easing: "linear", fill: "forwards"},
+        );
+        animRef.current = anim;
+        keysRef.current = keys;
+        anim.onfinish = () => {
+            if (animRef.current !== anim) return;
+            anim.cancel();
+            el.style.transform = "";
+            animRef.current = null;
+            keysRef.current = null;
+        };
+    };
+
+    return (
+        <svg
+            ref={ref}
+            viewBox="0 0 123 123"
+            aria-hidden="true"
+            fill="currentColor"
+            className="title-logo w-8 h-8 cursor-pointer md:w-10 md:h-10 text-accent"
+            style={{transformBox: "fill-box", transformOrigin: "center", touchAction: "manipulation"}}
+            onPointerEnter={spin}
+            onPointerDown={spin}
+        >
+            <polygon points={LOGO_POINTS}/>
+        </svg>
+    );
+}
 
 /** 大标题右上角弹出的 Nya~：弹性冒出 → 轻微晃动 → 下沉模糊消失（整体向右下倾斜） */
 const Nya = ({delay = NYA_DELAY}: { delay?: number }) => (
@@ -812,7 +902,6 @@ export default function Home() {
                                                 initial={animated ? {opacity: 0, scale: 0.4, rotate: -180} : false}
                                                 animate={{opacity: 1, scale: 1, rotate: 0}}
                                                 transition={{type: "spring", stiffness: 140, damping: 16, delay: 0.85}}
-                                                whileHover={{rotate: 90}}
                                             >
                                                 <Logo/>
                                             </motion.div>
